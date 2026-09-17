@@ -1,0 +1,228 @@
+# ============================================================
+# TribalSuite — NLLB / open-weight seq2seq MT config
+#
+# Every knob lives here. CLI flags override any of these.
+# Nothing else needs editing for a normal run.
+# ============================================================
+
+# ---------- DATA ----------
+#
+# NOTHING TO CONFIGURE HERE. Put the raw corpus CSVs in `raw_data/`:
+#
+#     raw_data/Bhili.csv      columns: English,Hindi,Bhili
+#     raw_data/Gondi.csv      columns: English,Hindi,Gondi
+#     raw_data/Mundari.csv    columns: English,Hindi,Mundari
+#     raw_data/Santali.csv    columns: English,Hindi,Santali
+#
+# then run `python prepare_data.py`, which writes
+# data/processed/D1_parallel.csv. Every script finds that by default.
+#
+# Paths below are resolved relative to THIS FILE, not the working directory, so
+# the whole folder can be moved or copied to another machine unchanged.
+data:
+  # Override only to point at a D1 file kept elsewhere. `null` = use the
+  # generated one. A relative path is taken from this directory.
+  path: null
+
+  # Where prepare_data.py looks for the raw corpus CSVs.
+  raw_dir: raw_data
+
+  # Fallbacks, tried in order, relative to this directory and to the cwd.
+  search_hints:
+    - data/processed/D1_parallel.csv
+    - D1_parallel.csv
+
+  languages: [Bhili, Gondi, Mundari, Santali]
+
+  # Held-out split used for MT. Same proportions + seed as the encoder
+  # experiments (70/10/20, seed 42), applied per language so every
+  # language contributes to train/dev/test in proportion.
+  split:
+    train: 0.70
+    dev: 0.10
+    test: 0.20
+  seed: 42
+
+  # Cap test items per language. null = use the whole test split.
+  # Set this for a quick smoke run; ALWAYS null for reported numbers.
+  max_test_per_language: null
+
+# ---------- MODELS ----------
+# Keys are the --model values. All are open-weight seq2seq, all <2B params.
+# Add a model by adding one entry here; nothing else changes.
+models:
+  nllb-600m:
+    hf_id: facebook/nllb-200-distilled-600M
+    family: nllb
+    params: 615M
+  nllb-1.3b:
+    hf_id: facebook/nllb-200-distilled-1.3B
+    family: nllb
+    params: 1.37B
+  nllb-1.3b-dense:
+    hf_id: facebook/nllb-200-1.3B
+    family: nllb
+    params: 1.37B
+  mbart50:
+    hf_id: facebook/mbart-large-50-many-to-one-mmt
+    family: mbart50
+    params: 611M
+  m2m100-418m:
+    hf_id: facebook/m2m100_418M
+    family: m2m100
+    params: 418M
+  m2m100-1.2b:
+    hf_id: facebook/m2m100_1.2B
+    family: m2m100
+    params: 1.2B
+  # Requires: pip install IndicTransToolkit  (see README)
+  indictrans2-200m:
+    hf_id: ai4bharat/indictrans2-indic-en-dist-200M
+    family: indictrans2
+    params: 200M
+  indictrans2-1b:
+    hf_id: ai4bharat/indictrans2-indic-en-1B
+    family: indictrans2
+    params: 1.1B
+
+# ---------- LANGUAGE TOKENS ----------
+# These models need a source-language token in the input, so a language they
+# were never trained on needs a stand-in. Coverage of our four languages:
+#
+#   Bhili (bhb)    : in NO model. Devanagari proxy.
+#   Gondi (gon)    : in NO model. Devanagari proxy.
+#   Mundari (unr)  : in NO model. Devanagari proxy.
+#   Santali (sat)  : NLLB-200 has sat_Beng = Santali in BENGALI script.
+#                    TribalCorp's Santali is OL CHIKI, so even this is a
+#                    script mismatch. IndicTrans2 does have sat_Olck.
+#
+# VERIFIED against transformers 5.17: `sat_Olck` is NOT in NLLB's tokenizer
+# (FAIRSEQ_LANGUAGE_CODES has only sat_Beng, and no _Olck code at all).
+# Devanagari codes NLLB does have: awa bho hin hne kas mag mai mar npi san.
+#
+# Sweep lists are self-healing: any candidate the tokenizer does not know is
+# dropped with a warning rather than failing the run. Sweep on DEV, report TEST.
+lang_tokens:
+  nllb:
+    target: eng_Latn
+    source:
+      Bhili: hin_Deva      # proxy — not in NLLB-200
+      Gondi: hin_Deva      # proxy — not in NLLB-200
+      Mundari: hin_Deva    # proxy — not in NLLB-200
+      Santali: sat_Beng    # NLLB's only Santali, and it is Bengali script
+    sweep:
+      Bhili: [hin_Deva, mar_Deva, guj_Gujr, awa_Deva, bho_Deva, mag_Deva]
+      Gondi: [hin_Deva, mar_Deva, tel_Telu, kan_Knda]
+      Mundari: [hin_Deva, ory_Orya, ben_Beng, san_Deva]
+      Santali: [sat_Beng, ben_Beng, hin_Deva]
+  mbart50:
+    target: en_XX
+    source:
+      Bhili: hi_IN
+      Gondi: hi_IN
+      Mundari: hi_IN
+      Santali: hi_IN
+    sweep:
+      Bhili: [hi_IN, gu_IN, mr_IN]
+      Gondi: [hi_IN, mr_IN, te_IN]
+      Mundari: [hi_IN, bn_IN]
+      Santali: [hi_IN, bn_IN]
+  m2m100:
+    target: en
+    source:
+      Bhili: hi
+      Gondi: hi
+      Mundari: hi
+      Santali: hi
+    sweep:
+      Bhili: [hi, gu, mr]
+      Gondi: [hi, mr]
+      Mundari: [hi, bn, or]
+      Santali: [hi, bn]
+  # IndicTrans2 covers 22 scheduled languages INCLUDING sat_Olck — the only
+  # model here that knows Santali in the script TribalCorp actually uses.
+  indictrans2:
+    target: eng_Latn
+    source:
+      Bhili: hin_Deva
+      Gondi: hin_Deva
+      Mundari: hin_Deva
+      Santali: sat_Olck
+    sweep:
+      Bhili: [hin_Deva, guj_Gujr, mar_Deva]
+      Gondi: [hin_Deva, mar_Deva, tel_Telu]
+      Mundari: [hin_Deva, ory_Orya, san_Deva]
+      Santali: [sat_Olck, hin_Deva, ben_Beng]
+
+# ---------- INFERENCE ----------
+infer:
+  batch_size: 32            # lowered automatically on CUDA OOM
+  max_source_length: 192
+  max_target_length: 192
+  num_beams: 4
+  # Write partial results to disk every N batches so a crash loses ~nothing.
+  checkpoint_every_batches: 20
+
+  # Print a progress line (rate, elapsed, ETA, GPU memory) roughly every N
+  # sentences. Lower = more chatter. 200 is a line every few seconds.
+  log_every_sentences: 200
+
+# ---------- FINE-TUNING ----------
+finetune:
+  # "lora" is the fast path: NLLB's embedding matrix is ~256k x d, so full FT
+  # is dominated by embedding grads. LoRA on attention trains in a fraction
+  # of the time and memory at comparable quality. Use "full" only if you
+  # have the budget and want the strongest possible number.
+  mode: lora               # lora | full
+
+  lora:
+    r: 16
+    alpha: 32
+    dropout: 0.05
+    target_modules: [q_proj, k_proj, v_proj, out_proj]
+
+  epochs: 3
+  lr: 0.0003               # 3e-4 for LoRA; drop to 3e-5 for mode=full
+  batch_size: 16
+  grad_accum: 2            # effective batch = batch_size * grad_accum
+  weight_decay: 0.01
+  warmup_ratio: 0.03
+  label_smoothing: 0.1
+  max_grad_norm: 1.0
+
+  # Speed / memory
+  freeze_embeddings: true  # big win on NLLB, negligible quality cost
+  freeze_encoder: false    # third variant: train decoder only (see README)
+  gradient_checkpointing: false   # turn on only if you OOM
+  group_by_length: true    # fewer pad tokens -> materially faster
+  num_workers: 4
+
+  # DEFAULT: one single model trained on all four languages at once. Each
+  # example still carries its own source-language token, so the model knows
+  # which language it is reading. This is standard multilingual MT and 4x
+  # cheaper than training four separate models.
+  #
+  # Set true (or pass --per_language) to instead train one model per language,
+  # which matches the per-language protocol used for the encoders. Optional.
+  per_language: false
+
+  eval_steps: 500          # evaluate on dev + save a checkpoint this often
+  save_total_limit: 2      # keep the last N checkpoints (plus best/)
+  early_stopping_patience: 3
+  max_train_samples: null  # cap for smoke tests; null = all
+
+  # How often to print a training line (loss, lr, grad norm, samples/s,
+  # tokens/s, GPU memory, elapsed, ETA). Lower = more verbose.
+  # `--verbose` on the command line forces this to 1.
+  logging_steps: 25
+
+# ---------- OUTPUT ----------
+output:
+  root: runs               # runs/<model>/<setting>/...
+  tables: tables          # final TSV/CSV/LaTeX go here
+
+# ---------- METRICS ----------
+metrics:
+  primary: chrf++
+  bootstrap_rounds: 1000   # 0 disables confidence intervals
+  seed: 42

@@ -1,0 +1,29 @@
+# TribalSuite — NLLB / open-weight seq2seq MT experiments
+#
+#   pip install -r requirements.txt
+#
+# Install torch FIRST, matched to the server's CUDA version, e.g.
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+
+torch>=2.0
+transformers>=4.40
+datasets>=2.19
+accelerate>=0.30
+peft>=0.11               # LoRA fine-tuning
+
+# sentencepiece is NOT optional: NLLB/mBART/M2M100 tokenizers need it, and
+# sacrebleu needs it for FLORES spBLEU. Without it spBLEU silently falls back
+# to a different tokenizer and stops being comparable to the paper.
+sentencepiece>=0.1.99
+
+sacrebleu>=2.4           # chrF++, spBLEU, BLEU
+rouge-score>=0.1.2       # ROUGE-L
+
+pandas>=2.0
+numpy>=1.24
+pyyaml>=6.0
+tqdm>=4.66
+tensorboard>=2.16        # training curves
+
+# Only needed for the indictrans2-* models. Skip unless you run those.
+# IndicTransToolkit>=1.0
